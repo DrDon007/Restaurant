@@ -121,13 +121,13 @@ class DiviExtension {
 	 */
 	protected function _enqueue_bundles() {
 		// Frontend Bundle
-		$bundle_url   = "{$this->plugin_dir_url}scripts/frontend-bundle.min.js";
+		$bundle_url = "{$this->plugin_dir_url}scripts/frontend-bundle.min.js";
 
 		wp_enqueue_script( "{$this->name}-frontend-bundle", $bundle_url, $this->_bundle_dependencies['frontend'], $this->version, true );
 
 		if ( et_core_is_fb_enabled() ) {
 			// Builder Bundle
-			$bundle_url   = "{$this->plugin_dir_url}scripts/builder-bundle.min.js";
+			$bundle_url = "{$this->plugin_dir_url}scripts/builder-bundle.min.js";
 
 			wp_enqueue_script( "{$this->name}-builder-bundle", $bundle_url, $this->_bundle_dependencies['builder'], $this->version, true );
 		}
@@ -151,6 +151,30 @@ class DiviExtension {
 
 			wp_enqueue_script( "{$this->name}-builder-bundle", $hot_bundle_url, $this->_bundle_dependencies['builder'], $this->version, true );
 		}
+	}
+
+	/**
+	 * Enqueues minified (production) or non-minified (hot reloaded) backend styles.
+	 *
+	 * @since 4.4.9
+	 */
+	protected function _enqueue_backend_styles() {
+		if ( $this->_debug ) {
+			$site_url           = wp_parse_url( get_site_url() );
+			$backend_styles_url = "{$site_url['scheme']}://{$site_url['host']}:3000/styles/backend-style.css";
+		} else {
+			$extension_dir_path  = plugin_dir_path( $this->plugin_dir );
+			$backend_styles_path = "{$extension_dir_path}styles/backend-style.min.css";
+			$backend_styles_url  = "{$this->plugin_dir_url}styles/backend-style.min.css";
+
+			// Ensure backend style CSS file exists on production.
+			if ( ! file_exists( $backend_styles_path ) ) {
+				return;
+			}
+		}
+
+		// Backend Styles - VB
+		wp_enqueue_style( "{$this->name}-backend-styles", $backend_styles_url, array(), $this->version );
 	}
 
 	/**
@@ -225,6 +249,7 @@ class DiviExtension {
 
 		add_action( 'et_builder_modules_loaded', array( $this, 'hook_et_builder_modules_loaded' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'wp_hook_enqueue_scripts' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'admin_hook_enqueue_scripts' ) );
 	}
 
 	/**
@@ -252,6 +277,7 @@ class DiviExtension {
 	 * {@see 'wp_enqueue_scripts'}
 	 *
 	 * @since 3.1
+	 * @since 4.4.9 Added backend styles for handling custom builder styles.
 	 */
 	public function wp_hook_enqueue_scripts() {
 		if ( $this->_debug ) {
@@ -263,6 +289,10 @@ class DiviExtension {
 			wp_enqueue_style( "{$this->name}-styles", $styles_url, array(), $this->version );
 
 			$this->_enqueue_bundles();
+		}
+
+		if ( et_core_is_fb_enabled() && ! et_builder_bfb_enabled() ) {
+			$this->_enqueue_backend_styles();
 		}
 
 		// Normalize the extension name to get actual script name. For example from 'divi-custom-modules' to `DiviCustomModules`
@@ -278,7 +308,18 @@ class DiviExtension {
 			wp_localize_script( "{$this->name}-builder-bundle", "{$extension_name}BuilderData", $this->_builder_js_data );
 		}
 	}
+
+	/**
+	 * Enqueues the extension's scripts and styles for admin area.
+	 *
+	 * @since 4.4.9
+	 */
+	public function admin_hook_enqueue_scripts() {
+		if ( et_builder_bfb_enabled() || et_builder_is_tb_admin_screen() ) {
+			$this->_enqueue_backend_styles();
+		}
+	}
 }
 
 
-new DiviExtension;
+new DiviExtension();
